@@ -16,7 +16,9 @@ RUN apt-get update && apt-get install -y \
     libonig-dev \
     libxml2-dev \
     libzip-dev \
-    && docker-php-ext-install pdo_mysql mbstring zip exif pcntl bcmath
+    sqlite3 \
+    libsqlite3-dev \
+    && docker-php-ext-install pdo_mysql pdo_sqlite mbstring zip exif pcntl bcmath
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -24,16 +26,23 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Set working directory
 WORKDIR /var/www
 
-# Copy existing application directory
+# Copy project files
 COPY . .
 
-# Install dependencies
+# Install PHP dependencies
 RUN composer install --no-interaction --prefer-dist --optimize-autoloader
 
-# Laravel permissions
+# Generate application key and cache config
+RUN php artisan config:clear && php artisan config:cache
+
+# Make sure storage and cache directories are writable
 RUN chown -R www-data:www-data /var/www \
-    && chmod -R 755 /var/www/storage
+    && chmod -R 755 /var/www/storage \
+    && chmod -R 755 /var/www/bootstrap/cache
+
+# Ensure database file exists
+RUN mkdir -p /var/www/database && touch /var/www/database/database.sqlite
 
 EXPOSE 8000
-CMD php artisan serve --host=0.0.0.0 --port=8000
 
+CMD php artisan serve --host=0.0.0.0 --port=8000
